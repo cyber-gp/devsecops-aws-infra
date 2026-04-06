@@ -247,7 +247,7 @@ kubectl exec -it <POD_NAME> -n <NAMESPACE> -- /bin/bash
 kubectl exec -it <POD_NAME> -n <NAMESPACE> -- /bin/sh
 
 # Example:
-kubectl exec -it dev-nest-eks-deployment-7d4cc757c-8nf2q -n dev-nest-eks-namespace -- /bin/bash
+kubectl exec -it dev-nest-eks-deployment-96c6dd54b-rgdnt -n dev-nest-eks-namespace -- /bin/bash
 ```
 
 ### Deployment Operations
@@ -440,3 +440,7 @@ aws ec2-instance-connect ssh --instance-id <instance-id>
 - Use `docker system prune` carefully as it removes all unused containers, images, and volumes
 - For EKS, ensure `kubectl` is installed and configured with `aws eks update-kubeconfig`
 - Use `-n <namespace>` flag consistently to avoid operating on the wrong namespace
+
+# Tells Git Bash to stop translating Unix paths to Windows paths.
+MSYS_NO_PATHCONV=1 kubectl exec -it dev-nest-eks-deployment-96c6dd54b-rgdnt \
+  -n dev-nest-eks-namespace -- /bin/bash
