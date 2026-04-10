@@ -444,3 +444,7 @@ aws ec2-instance-connect ssh --instance-id <instance-id>
 # Tells Git Bash to stop translating Unix paths to Windows paths.
 MSYS_NO_PATHCONV=1 kubectl exec -it dev-nest-eks-deployment-96c6dd54b-rgdnt \
   -n dev-nest-eks-namespace -- /bin/bash
+
+# Command to Release a State Lock file
+- terraform force-unlock <LOCK_ID>
+- terraform force-unlock 3d5dd30b-3bdd-3764-8b96-2c54fe5accce
