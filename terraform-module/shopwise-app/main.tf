@@ -86,7 +86,7 @@ module "db-migrate-server" {
   ec2_instance_type                   = "t2.micro"
   private_app_subnet_az1_id           = module.vpc.private_app_subnet_az1_id
   db_migrate_server_security_group_id = module.sg.db_migrate_server_security_group_id
-  ec2_instance_profile_role_name      = module.ec2-instance-profile.ec2_instance_profile_role_name 
+  ec2_instance_profile_role_name      = module.ec2-instance-profile.ec2_instance_profile_role_name
   flyway_version                      = "11.20.2"
   sql_script_s3_uri                   = "s3://dev-app-code-files/V1__shopwise.sql"
   rds_endpoint                        = module.rds.rds_endpoint
@@ -95,4 +95,11 @@ module "db-migrate-server" {
   rds_db_password                     = module.secrets-manager.rds_db_password
   project_name                        = module.vpc.project_name
   environment                         = module.vpc.environment
+}
+
+# Create Certificate Manager
+module "acm" {
+  source            = "git::ssh://git@github.com/Tolani-Akintayo/aws-modules.git//acm"
+  domain_name       = "tolaniakintayo.xyz"
+  alternative_names = "*.tolaniakintayo.xyz"
 }
