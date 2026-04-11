@@ -27,3 +27,47 @@ module "nat-gw" {
   private_data_subnet_az1_id = module.vpc.private_data_subnet_az1_id
   private_data_subnet_az2_id = module.vpc.private_data_subnet_az2_id
 }
+
+# Create Security Groups
+module "sg" {
+  source       = "git::ssh://git@github.com/Tolani-Akintayo/aws-modules.git//security-groups"
+  environment  = module.vpc.environment
+  project_name = module.vpc.project_name
+  vpc_id       = module.vpc.vpc_id
+  vpc_cidr     = module.vpc.vpc_cidr
+}
+
+# Create eice
+module "eice" {
+  source                    = "git::ssh://git@github.com/Tolani-Akintayo/aws-modules.git//eice"
+  project_name              = module.vpc.project_name
+  environment               = module.vpc.environment
+  private_app_subnet_az1_id = module.vpc.private_app_subnet_az1_id
+  eice_security_group_id    = module.sg.eice_security_group_id
+}
+
+# Create Secrets Manager
+module "secrets-manager" {
+  source    = "git::ssh://git@github.com/Tolani-Akintayo/aws-modules.git//secrets-manager"
+  secret_id = "dev-nest-secrets"
+}
+
+# Create RDS
+module "rds" {
+  source                       = "git::ssh://git@github.com/Tolani-Akintayo/aws-modules.git//rds"
+  environment                  = module.vpc.environment
+  project_name                 = module.vpc.project_name
+  private_data_subnet_az1_id   = module.vpc.private_data_subnet_az1_id
+  private_data_subnet_az2_id   = module.vpc.private_data_subnet_az2_id
+  database_engine              = "mysql"
+  database_engine_version      = "8.4.8"
+  multi_az_deployment          = false
+  database_instance_identifier = "app-db"
+  rds_db_username              = module.secrets-manager.rds_db_username
+  rds_db_password              = module.secrets-manager.rds_db_password
+  rds_db_secret_name           = module.secrets-manager.rds_db_username
+  database_instance_class      = "db.t3.micro"
+  database_security_group_id   = module.sg.database_security_group_id
+  availability_zone_1          = module.vpc.availability_zone_1
+  publicly_accessible          = false
+}

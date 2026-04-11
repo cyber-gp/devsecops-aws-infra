@@ -447,4 +447,11 @@ MSYS_NO_PATHCONV=1 kubectl exec -it dev-nest-eks-deployment-96c6dd54b-rgdnt \
 
 # Command to Release a State Lock file
 - terraform force-unlock <LOCK_ID>
-- terraform force-unlock 3d5dd30b-3bdd-3764-8b96-2c54fe5accce
+- terraform force-unlock d05ea135-9ce4-adea-e5cb-cf0e1ae4f788
+
+# Commands to download the latest versions for both modules and providers
+- terraform init -upgrade
+
+# Command to download and update only the modules referenced in your configuration
+
+- terraform get -update
