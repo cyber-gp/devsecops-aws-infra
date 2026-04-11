@@ -71,3 +71,11 @@ module "rds" {
   availability_zone_1          = module.vpc.availability_zone_1
   publicly_accessible          = false
 }
+
+# Create ec2 instance profile
+module "ec2-instance-profile" {
+  source       = "git::ssh://git@github.com/Tolani-Akintayo/aws-modules.git//iam/ec2-instance-profile"
+  project_name = module.vpc.project_name
+  environment  = module.vpc.environment
+}
+
