@@ -79,3 +79,20 @@ module "ec2-instance-profile" {
   environment  = module.vpc.environment
 }
 
+# Create Data Migration server
+module "db-migrate-server" {
+  source                              = "git::ssh://git@github.com/Tolani-Akintayo/aws-modules.git//db-migrate-server"
+  amazon_linux_ami_id                 = "ami-051de6a4e7ae45f77"
+  ec2_instance_type                   = "t2.micro"
+  private_app_subnet_az1_id           = module.vpc.private_app_subnet_az1_id
+  db_migrate_server_security_group_id = module.sg.db_migrate_server_security_group_id
+  ec2_instance_profile_role_name      = module.ec2-instance-profile.ec2_instance_profile_role_name 
+  flyway_version                      = "11.20.2"
+  sql_script_s3_uri                   = "s3://dev-app-code-files/V1__shopwise.sql"
+  rds_endpoint                        = module.rds.rds_endpoint
+  rds_db_secret_name                  = module.secrets-manager.rds_db_secret_name
+  rds_db_username                     = module.secrets-manager.rds_db_username
+  rds_db_password                     = module.secrets-manager.rds_db_password
+  project_name                        = module.vpc.project_name
+  environment                         = module.vpc.environment
+}
