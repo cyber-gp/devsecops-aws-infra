@@ -126,6 +126,8 @@ module "ecs-role" {
   environment  = module.vpc.environment
 }
 
+# Create ECS
+
 module "ecs" {
   source                      = "git::ssh://git@github.com/Tolani-Akintayo/aws-modules.git//ecs"
   region                      = module.vpc.region
@@ -145,4 +147,18 @@ module "ecs" {
   app_security_group_id       = module.sg.app_server_security_group_id
   alb_target_group_arn        = module.alb.alb_target_group_arn
   depends_on                  = [module.db-migrate-server]
+}
+
+# Create Route 53
+
+module "route53" {
+  source                             = "git::ssh://git@github.com/Tolani-Akintayo/aws-modules.git//route53"
+  domain_name                        = module.acm.domain_name
+  record_name                        = "aws-demo"
+  application_load_balancer_dns_name = module.alb.application_load_balancer_dns_name
+  application_load_balancer_zone_id  = module.alb.application_load_balancer_zone_id
+}
+
+output "website_url" {
+  value = "https://${module.route53.record_name}.${module.acm.domain_name}"
 }
