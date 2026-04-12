@@ -159,6 +159,7 @@ module "route53" {
   application_load_balancer_zone_id  = module.alb.application_load_balancer_zone_id
 }
 
+# values to be outputed must have been outputed in their modules to be able to make sure of it here 👇
 output "website_url" {
   value = "https://${module.route53.record_name}.${module.acm.domain_name}"
 }
