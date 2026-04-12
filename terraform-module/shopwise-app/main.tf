@@ -103,3 +103,46 @@ module "acm" {
   domain_name       = "tolaniakintayo.xyz"
   alternative_names = "*.tolaniakintayo.xyz"
 }
+
+# Create Application Load Balancer
+module "alb" {
+  source                = "git::ssh://git@github.com/Tolani-Akintayo/aws-modules.git//alb"
+  project_name          = module.vpc.project_name
+  environment           = module.vpc.environment
+  alb_security_group_id = module.sg.alb_security_group_id
+  public_subnet_az1_id  = module.vpc.public_subnet_az1_id
+  public_subnet_az2_id  = module.vpc.public_subnet_az2_id
+  target_type           = "ip"
+  vpc_id                = module.vpc.vpc_id
+  health_check_path     = "/index.php"
+  acm_certificate_arn   = module.acm.acm_certificate_arn
+}
+
+# Create ECS role
+
+module "ecs-role" {
+  source       = "git::ssh://git@github.com/Tolani-Akintayo/aws-modules.git//iam/ecs-role"
+  project_name = module.vpc.project_name
+  environment  = module.vpc.environment
+}
+
+module "ecs" {
+  source                      = "git::ssh://git@github.com/Tolani-Akintayo/aws-modules.git//ecs"
+  region                      = module.vpc.region
+  environment                 = module.vpc.environment
+  project_name                = module.vpc.environment
+  task_cpu                    = 2048
+  task_memory                 = 4096
+  ecs_task_execution_role_arn = module.ecs-role.ecs_task_execution_role_arn
+  ecs_task_role_arn           = module.ecs-role.ecs_task_role_arn
+  architecture                = "X86_64"
+  container_image             = "198811873315.dkr.ecr.us-east-2.amazonaws.com/nest:10fbbef"
+  container_port              = 80
+  host_port                   = 80
+  service_desired_count       = 2
+  private_app_subnet_az1_id   = module.vpc.private_app_subnet_az1_id
+  private_app_subnet_az2_id   = module.vpc.private_app_subnet_az2_id
+  app_security_group_id       = module.sg.app_server_security_group_id
+  alb_target_group_arn        = module.alb.alb_target_group_arn
+  depends_on                  = [module.db-migrate-server]
+}
