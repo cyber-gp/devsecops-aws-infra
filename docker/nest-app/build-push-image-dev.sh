@@ -116,7 +116,7 @@ APPLICATION_CODE_FILE_NAME="nest"
 RDS_ENDPOINT="dev-nest-db.cbgq6s0gc62q.us-east-2.rds.amazonaws.com"
 RDS_DB_NAME="applicationdb"
 RDS_DB_USERNAME="admin"
-SECRET_NAME="dev-nest-secret"
+SECRET_NAME="dev-nest-secrets"
 AWS_REGION="us-east-2"
 ECR_REPO_NAME="nest"
 IMAGE_NAME="nest"
@@ -234,7 +234,7 @@ build_image() {
 
     # Build context '.' is passed as a positional argument — always explicit,
     # never buried at the end of a continuation chain
-    docker build "${build_args[@]}" .
+    docker build "${build_args[@]}" -f Dockerfile.dev .
 
     log_success "Docker image built: ${IMAGE_NAME}:${IMAGE_TAG}"
 }

@@ -18,7 +18,7 @@ RDS_DB_NAME="applicationdb"
 RDS_DB_USERNAME="admin"
 IMAGE_NAME="nest"
 IMAGE_TAG="1.0.0"
-SECRET_NAME="dev-nest-secret"
+SECRET_NAME="dev-nest-secrets"
 AWS_REGION="us-east-2"
 
 # Define Docker image push variables

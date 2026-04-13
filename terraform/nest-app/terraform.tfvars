@@ -28,7 +28,7 @@ publicly_accessible          = false
 amazon_linux_ami_id = "ami-051de6a4e7ae45f77"
 ec2_instance_type   = "t2.micro"
 flyway_version      = "11.20.2"
-sql_script_s3_uri   = "s3://dev-app-code-files/V1__shopwise.sql"
+sql_script_s3_uri   = "s3://dev-app-code-files/nest/V1__nest.sql"
 
 # ACM
 domain_name       = "tolaniakintayo.xyz"
@@ -42,10 +42,10 @@ health_check_path = "/index.php"
 operator_email = "hello@tolaniakintayo.xyz"
 
 # Route 53
-record_name = "shopwise"
+record_name = "nest"
 
 # ASG
-web_files_s3_uri             = "s3://dev-app-code-files/shopwise.zip"
-service_provider_file_s3_uri = "s3://dev-app-code-files/AppServiceProvider.php"
-application_code_file_name   = "shopwise"
+web_files_s3_uri             = "s3://dev-app-code-files/nest/nest.zip"
+service_provider_file_s3_uri = "s3://dev-app-code-files/nest/AppServiceProvider.php"
+application_code_file_name   = "nest"
 

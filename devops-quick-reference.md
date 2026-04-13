@@ -388,8 +388,8 @@ aws ecs describe-services `
 
 # Bash
 aws ecs describe-services \
-    --cluster dev-ecs-cluster \
-    --services nest-service
+    --cluster dev-nest-cluster \
+    --services dev-nest-service
 ```
 
 **Step 3: Get Task ARN**
@@ -399,14 +399,14 @@ $taskArn = (aws ecs list-tasks --cluster dev-ecs-cluster --service-name nest-ser
 ```
 ```bash
 # Bash
-taskArn=$(aws ecs list-tasks --cluster dev-ecs-cluster --service-name nest-service --query 'taskArns[0]' --output text)
+taskArn=$(aws ecs list-tasks --cluster dev-nest-cluster --service-name dev-nest-service --query 'taskArns[0]' --output text)
 ```
 
 **Step 4: Execute Command**
 ```bash
 # PowerShell
 aws ecs execute-command `
-    --cluster dev-ecs-cluster `
+    --cluster dev-nest-cluster `
     --task $taskArn `
     --container nest `
     --interactive `
@@ -414,7 +414,7 @@ aws ecs execute-command `
 
 # Bash
 aws ecs execute-command \
-    --cluster dev-ecs-cluster \
+    --cluster dev-nest-cluster \
     --task $taskArn \
     --container nest \
     --interactive \
@@ -455,3 +455,16 @@ MSYS_NO_PATHCONV=1 kubectl exec -it dev-nest-eks-deployment-96c6dd54b-rgdnt \
 # Command to download and update only the modules referenced in your configuration
 
 - terraform get -update
+
+
+aws ecs update-service \
+  --cluster dev-nest-cluster \
+  --service dev-nest-service \
+  --force-new-deployment \
+  --region us-east-2
+
+  aws ecs describe-tasks \
+  --cluster dev-nest-cluster \
+  --tasks d9d5460b48ec406cb18618da0e367298 \
+  --region us-east-2 \
+  --query 'tasks[0].enableExecuteCommand'
