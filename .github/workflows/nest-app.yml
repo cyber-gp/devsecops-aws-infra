@@ -40,7 +40,7 @@ env:
   ENVIRONMENT: dev
   RECORD_NAME: demo
   DOMAIN_NAME: tolaniakintayo.xyz
-  GITHUB_USERNAME: Tolani-Akintayo
+  GITHUB_USERNAME: tolani-akintayo
   REPOSITORY_NAME: nest-app-code
   SERVICE_PROVIDER_FILE_NAME: AppServiceProvider
   APPLICATION_CODE_FILE_NAME: nest
