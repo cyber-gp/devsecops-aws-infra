@@ -35,7 +35,7 @@ env:
   AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
   AWS_REGION: us-east-2
   AWS_ACCOUNT_ID: "198811873315"
-  TERRAFORM_ACTION: destroy
+  TERRAFORM_ACTION: apply
   PROJECT_NAME: nest
   ENVIRONMENT: dev
   RECORD_NAME: demo
@@ -88,7 +88,6 @@ jobs:
         if: env.TERRAFORM_ACTION == 'apply'
         working-directory: ./terraform-module-ecs-cicd/nest-app
         run: |
-          TERRAFORM_ACTION
           echo "RDS_ENDPOINT=$(terraform output -raw rds_endpoint | cut -d ':' -f1)" >> $GITHUB_ENV
           echo "ECS_TASK_DEFINITION_NAME=$(terraform output -raw ecs_task_definition_name | cut -d ':' -f1)" >> $GITHUB_ENV
           echo "ECS_CLUSTER_NAME=$(terraform output -raw ecs_cluster_name | cut -d ':' -f1)" >> $GITHUB_ENV
