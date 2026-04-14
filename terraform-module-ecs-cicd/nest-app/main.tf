@@ -163,3 +163,25 @@ module "route53" {
 output "website_url" {
   value = "https://${module.route53.record_name}.${module.acm.domain_name}"
 }
+
+# For GitHub Actions Workflows to reference
+
+output "domain_name" {
+  value = module.acm.domain_name
+}
+
+output "rds_endpoint" {
+  value = module.rds.rds_endpoint
+}
+
+output "ecs_task_definition_name" {
+  value = module.ecs.ecs_task_definition_name
+}
+
+output "ecs_cluster_name" {
+  value = module.ecs.ecs_cluster_name
+}
+
+output "ecs_service_name" {
+  value = module.ecs.ecs_service_name
+}
