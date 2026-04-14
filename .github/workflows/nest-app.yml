@@ -54,40 +54,40 @@ jobs:
   #--------------------------------------------------------------
   deploy_aws_infrastructure:
     name: Build AWS infrastructure
-    runs-on: <RUNNER_OS>
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: <CHECKOUT_ACTION>
+        uses: actions/checkout@v6
 
       - name: Configure SSH access for Terraform modules
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.<SSH_KEY_SECRET_NAME> }}" > ~/.ssh/id_ed25519
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
       - name: Set up Terraform
-        uses: <TERRAFORM_SETUP_ACTION>
+        uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: latest
+          terraform_version: "1.14.6"
 
       - name: Run Terraform init
-        working-directory: <TERRAFORM_WORKING_DIR>
-        run: <TERRAFORM_INIT_COMMAND>
+        working-directory: ./terraform-module-ecs-cicd/nest-app
+        run: terraform init
 
       - name: Run Terraform plan
-        working-directory: <TERRAFORM_WORKING_DIR>
-        run: <TERRAFORM_PLAN_COMMAND>
+        working-directory: ./terraform-module-ecs-cicd/nest-app
+        run: terraform plan -no-color
 
       - name: Run Terraform apply/destroy
-        working-directory: <TERRAFORM_WORKING_DIR>
-        run: terraform ${TERRAFORM_ACTION} <AUTO_APPROVE_FLAG>
+        working-directory: ./terraform-module-ecs-cicd/nest-app
+        run: terraform ${TERRAFORM_ACTION} --auto-approve
 
       - name: Export Terraform outputs
-        if: <CONDITION_FOR_APPLY>
-        working-directory: <TERRAFORM_WORKING_DIR>
+        if: env.TERRAFORM_ACTION == 'apply'
+        working-directory: ./terraform-module-ecs-cicd/nest-app
         run: |
-          echo "DOMAIN_NAME=$(terraform output -raw domain_name | cut -d ':' -f1)" >> $GITHUB_ENV
+          TERRAFORM_ACTION
           echo "RDS_ENDPOINT=$(terraform output -raw rds_endpoint | cut -d ':' -f1)" >> $GITHUB_ENV
           echo "ECS_TASK_DEFINITION_NAME=$(terraform output -raw ecs_task_definition_name | cut -d ':' -f1)" >> $GITHUB_ENV
           echo "ECS_CLUSTER_NAME=$(terraform output -raw ecs_cluster_name | cut -d ':' -f1)" >> $GITHUB_ENV
