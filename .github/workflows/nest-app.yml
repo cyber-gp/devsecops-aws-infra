@@ -123,7 +123,7 @@ jobs:
         run: bash ./build-image.sh
 
       - name: Scan Docker image for vulnerabilities
-        uses: aquasecurity/trivy-action@0.69.3
+        uses: aquasecurity/trivy-action@57a97c7
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           severity: CRITICAL,HIGH
