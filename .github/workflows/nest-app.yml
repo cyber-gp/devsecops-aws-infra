@@ -47,7 +47,7 @@ env:
   RDS_DB_NAME: applicationdb
   RDS_DB_USERNAME: admin
   IMAGE_NAME: nest
-  IMAGE_TAG: 1.0.2
+  IMAGE_TAG: 1.0.1
 
 jobs:
   #--------------------------------------------------------------
@@ -333,13 +333,13 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "${{ needs.test_application.result == 'success' && needs.monitor_deployment.result == 'success' && 'Deployment Successful' || 'Deployment Failed' }}",
+              "text": "${{ needs.test_application.result == 'success' && needs.monitor_deployment.result == 'success' ? 'Deployment Successful' : 'Deployment Failed' }}",
               "blocks": [
                 {
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "${{ needs.test_application.result == 'success' && needs.monitor_deployment.result == 'success' && 'Deployment Successful' || 'Deployment Failed' }}"
+                    "text": "${{ needs.test_application.result == 'success' && needs.monitor_deployment.result == 'success' ? 'Deployment Successful' : 'Deployment Failed' }}"
                   }
                 },
                 {
@@ -364,6 +364,15 @@ jobs:
                     "type": "mrkdwn",
                     "text": "*Pipeline:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
                   }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Deployed at: <!date^${{ github.event.head_commit.timestamp || github.event.repository.updated_at || github.event.created_at }}^{date_short_pretty} at {time}|Unknown time>"
+                    }
+                  ]
                 }
               ]
             }
