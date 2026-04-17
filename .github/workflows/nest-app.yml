@@ -48,7 +48,7 @@ env:
   RDS_DB_USERNAME: admin
   ECR_REPO_NAME: nest
   IMAGE_NAME: nest
-  IMAGE_TAG: 1.0.1
+  IMAGE_TAG: ${{ github.sha }} # 1.0.1
 
 jobs:
   #--------------------------------------------------------------
@@ -154,6 +154,7 @@ jobs:
           RDS_ENDPOINT: ${{ needs.deploy_aws_infrastructure.outputs.rds_endpoint }}
           RDS_DB_PASSWORD: ${{ secrets.RDS_DB_PASSWORD }}
           PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
         run: bash ./build-image.sh
 
       - name: Scan Docker image for vulnerabilities
@@ -184,7 +185,9 @@ jobs:
 
       - name: Push Docker image to ECR
         if: steps.check_image.outputs.image_exists == 'false'
-        working-directory: ./docker/nest-app-cicd
+        working-directory: ./docker/nest-app-
+        env:
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
         run: bash ./push-image.sh
 
     outputs:
