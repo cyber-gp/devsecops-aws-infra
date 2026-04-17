@@ -185,7 +185,7 @@ jobs:
 
       - name: Push Docker image to ECR
         if: steps.check_image.outputs.image_exists == 'false'
-        working-directory: ./docker/nest-app-
+        working-directory: ./docker/nest-app-cicd
         env:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
         run: bash ./push-image.sh
