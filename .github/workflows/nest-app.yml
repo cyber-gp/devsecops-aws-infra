@@ -40,7 +40,7 @@ env:
   AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
   AWS_REGION: us-east-2
   AWS_ACCOUNT_ID: "198811873315"
-  TERRAFORM_ACTION: apply
+  TERRAFORM_ACTION: destroy
   PROJECT_NAME: nest
   ENVIRONMENT: dev
   RECORD_NAME: demo
@@ -63,7 +63,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37
+        with: 
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Configure SSH access for Terraform modules
         run: |
