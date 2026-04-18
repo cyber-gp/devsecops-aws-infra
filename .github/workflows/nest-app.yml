@@ -90,6 +90,11 @@ jobs:
       - name: Run Terraform plan
         working-directory: ./terraform-module-ecs-cicd/nest-app
         run: terraform plan -no-color
+      
+      - name: Verify AWS identity before apply
+        run: |
+          aws sts get-caller-identity
+          echo "AWS auth verified — proceeding with apply"
 
       - name: Run Terraform apply/destroy
         working-directory: ./terraform-module-ecs-cicd/nest-app
