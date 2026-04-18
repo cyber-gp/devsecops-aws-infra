@@ -82,6 +82,7 @@ jobs:
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.14.6"
+          terraform_wrapper: false
 
       - name: Run Terraform init
         working-directory: ./terraform-module-ecs-cicd/nest-app
