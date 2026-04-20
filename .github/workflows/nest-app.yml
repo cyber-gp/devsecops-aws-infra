@@ -165,6 +165,12 @@ jobs:
 
           echo "SCAN_SUMMARY=$SUMMARY" >> $GITHUB_ENV
           echo "$SUMMARY"
+          
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37
+        with: 
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Push Docker image to ECR
         working-directory: ./docker/nest-app-cicd
