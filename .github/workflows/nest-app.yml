@@ -132,6 +132,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37
+        with: 
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Build Docker image
         working-directory: ./docker/nest-app-cicd
@@ -165,7 +171,7 @@ jobs:
 
           echo "SCAN_SUMMARY=$SUMMARY" >> $GITHUB_ENV
           echo "$SUMMARY"
-          
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37
         with: 
