@@ -124,54 +124,54 @@ jobs:
   #--------------------------------------------------------------
   # JOB 2: Build, Scan, and Push Docker Image to ECR
   #--------------------------------------------------------------
-  # build_and_push_image:
-  #   name: Build, scan, and push Docker image to ECR
-  #   needs: deploy_aws_infrastructure
-  #   if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v6
+  build_and_push_image:
+    name: Build, scan, and push Docker image to ECR
+    needs: deploy_aws_infrastructure
+    if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-  #     - name: Build Docker image
-  #       working-directory: ./docker/nest-app-cicd
-  #       env:
-  #         DOMAIN_NAME: ${{ needs.deploy_aws_infrastructure.outputs.domain_name }}
-  #         RDS_ENDPOINT: ${{ needs.deploy_aws_infrastructure.outputs.rds_endpoint }}
-  #         RDS_DB_PASSWORD: ${{ secrets.RDS_DB_PASSWORD }}
-  #         PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-  #       run: bash ./build-image.sh
+      - name: Build Docker image
+        working-directory: ./docker/nest-app-cicd
+        env:
+          DOMAIN_NAME: ${{ needs.deploy_aws_infrastructure.outputs.domain_name }}
+          RDS_ENDPOINT: ${{ needs.deploy_aws_infrastructure.outputs.rds_endpoint }}
+          RDS_DB_PASSWORD: ${{ secrets.RDS_DB_PASSWORD }}
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: bash ./build-image.sh
 
-  #     - name: Scan Docker image for vulnerabilities
-  #       uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
-  #       with:
-  #         image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-  #         severity: CRITICAL,HIGH
-  #         exit-code: ${{ env.ENVIRONMENT == 'prod' && '1' || '0' }}
-  #         format: json
-  #         output: trivy-report.json
+      - name: Scan Docker image for vulnerabilities
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          severity: CRITICAL,HIGH
+          exit-code: ${{ env.ENVIRONMENT == 'prod' && '1' || '0' }}
+          format: json
+          output: trivy-report.json
 
-  #     - name: Generate vulnerability summary
-  #       run: |
-  #         CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-report.json)
-  #         HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-report.json)
-  #         TOTAL=$((CRITICAL + HIGH))
+      - name: Generate vulnerability summary
+        run: |
+          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-report.json)
+          HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-report.json)
+          TOTAL=$((CRITICAL + HIGH))
 
-  #         if [ "$TOTAL" -eq 0 ]; then
-  #           SUMMARY="No vulnerabilities found"
-  #         else
-  #           SUMMARY="${TOTAL} vulnerabilities found (${CRITICAL} Critical, ${HIGH} High)"
-  #         fi
+          if [ "$TOTAL" -eq 0 ]; then
+            SUMMARY="No vulnerabilities found"
+          else
+            SUMMARY="${TOTAL} vulnerabilities found (${CRITICAL} Critical, ${HIGH} High)"
+          fi
 
-  #         echo "SCAN_SUMMARY=$SUMMARY" >> $GITHUB_ENV
-  #         echo "$SUMMARY"
+          echo "SCAN_SUMMARY=$SUMMARY" >> $GITHUB_ENV
+          echo "$SUMMARY"
 
-  #     - name: Push Docker image to ECR
-  #       working-directory: ./docker/nest-app-cicd
-  #       run: bash ./push-image.sh
+      - name: Push Docker image to ECR
+        working-directory: ./docker/nest-app-cicd
+        run: bash ./push-image.sh
 
-  #   outputs:
-  #     scan_summary: ${{ env.SCAN_SUMMARY }}
+    outputs:
+      scan_summary: ${{ env.SCAN_SUMMARY }}
 
   #--------------------------------------------------------------
   # JOB 3: Create New Task Definition Revision
