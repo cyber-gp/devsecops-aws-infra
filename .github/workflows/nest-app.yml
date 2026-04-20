@@ -188,40 +188,47 @@ jobs:
   #--------------------------------------------------------------
   # JOB 3: Create New Task Definition Revision
   #--------------------------------------------------------------
-  # create_task_definition_revision:
-  #   name: Create new task definition revision
-  #   needs:
-  #     - deploy_aws_infrastructure
-  #     - build_and_push_image
-  #   if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Get current task definition revision
-  #       env:
-  #         ECS_FAMILY: ${{ needs.deploy_aws_infrastructure.outputs.task_definition_name }}
-  #       run: |
-  #         CURRENT_REVISION=$(aws ecs describe-task-definition --task-definition "${ECS_FAMILY}" \
-  #           --query 'taskDefinition.revision' --output text)
-  #         echo "CURRENT_TASK_DEFINITION_REVISION=$CURRENT_REVISION" >> $GITHUB_ENV
+  create_task_definition_revision:
+    name: Create new task definition revision
+    needs:
+      - deploy_aws_infrastructure
+      - build_and_push_image
+    if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
+    runs-on: ubuntu-latest
+    steps:
 
-  #     - name: Create new task definition revision
-  #       env:
-  #         ECS_FAMILY: ${{ needs.deploy_aws_infrastructure.outputs.task_definition_name }}
-  #         ECS_IMAGE: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-  #       run: |
-  #         TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition "${ECS_FAMILY}")
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37
+        with: 
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          
+      - name: Get current task definition revision
+        env:
+          ECS_FAMILY: ${{ needs.deploy_aws_infrastructure.outputs.task_definition_name }}
+        run: |
+          CURRENT_REVISION=$(aws ecs describe-task-definition --task-definition "${ECS_FAMILY}" \
+            --query 'taskDefinition.revision' --output text)
+          echo "CURRENT_TASK_DEFINITION_REVISION=$CURRENT_REVISION" >> $GITHUB_ENV
 
-  #         NEW_TASK_DEFINITION=$(echo "$TASK_DEFINITION" | jq --arg IMAGE "${ECS_IMAGE}" \
-  #           '.taskDefinition | .containerDefinitions[0].image = $IMAGE |
-  #           del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
+      - name: Create new task definition revision
+        env:
+          ECS_FAMILY: ${{ needs.deploy_aws_infrastructure.outputs.task_definition_name }}
+          ECS_IMAGE: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        run: |
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition "${ECS_FAMILY}")
 
-  #         NEW_TASK_DEFINITION_REVISION=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION" | jq '.taskDefinition.revision')
+          NEW_TASK_DEFINITION=$(echo "$TASK_DEFINITION" | jq --arg IMAGE "${ECS_IMAGE}" \
+            '.taskDefinition | .containerDefinitions[0].image = $IMAGE |
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
 
-  #         echo "NEW_TASK_DEFINITION_REVISION=$NEW_TASK_DEFINITION_REVISION" >> $GITHUB_ENV
+          NEW_TASK_DEFINITION_REVISION=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION" | jq '.taskDefinition.revision')
 
-  #   outputs:
-  #     new_task_definition_revision: ${{ env.NEW_TASK_DEFINITION_REVISION }}
-  #     current_task_definition_revision: ${{ env.CURRENT_TASK_DEFINITION_REVISION }}
+          echo "NEW_TASK_DEFINITION_REVISION=$NEW_TASK_DEFINITION_REVISION" >> $GITHUB_ENV
+
+    outputs:
+      new_task_definition_revision: ${{ env.NEW_TASK_DEFINITION_REVISION }}
+      current_task_definition_revision: ${{ env.CURRENT_TASK_DEFINITION_REVISION }}
 
   # #--------------------------------------------------------------
   # # JOB 4: Restart ECS Fargate Service
