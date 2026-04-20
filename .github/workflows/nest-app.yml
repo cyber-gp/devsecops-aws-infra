@@ -40,7 +40,7 @@ env:
   AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
   AWS_REGION: us-east-2
   AWS_ACCOUNT_ID: "198811873315"
-  TERRAFORM_ACTION: destroy
+  TERRAFORM_ACTION: apply
   PROJECT_NAME: nest
   ENVIRONMENT: dev
   RECORD_NAME: demo
@@ -121,9 +121,9 @@ jobs:
       ecs_cluster_name: ${{ env.ECS_CLUSTER_NAME }}
       ecs_service_name: ${{ env.ECS_SERVICE_NAME }}
 
-  # #--------------------------------------------------------------
-  # # JOB 2: Build, Scan, and Push Docker Image to ECR
-  # #--------------------------------------------------------------
+  #--------------------------------------------------------------
+  # JOB 2: Build, Scan, and Push Docker Image to ECR
+  #--------------------------------------------------------------
   # build_and_push_image:
   #   name: Build, scan, and push Docker image to ECR
   #   needs: deploy_aws_infrastructure
