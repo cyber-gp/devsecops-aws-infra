@@ -2,6 +2,7 @@
 provider "aws" {
   region  = var.region
   profile = "tolani-admin"
+  
   default_tags {
     tags = {
       "Automation"  = "terraform"
