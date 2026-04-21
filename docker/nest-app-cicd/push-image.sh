@@ -14,19 +14,30 @@ aws ecr describe-repositories --repository-names "$IMAGE_NAME" --region "$AWS_RE
     aws ecr create-repository --repository-name "$IMAGE_NAME" --region "$AWS_REGION"
 
 # ================================================================
-# Tag the image
-# ================================================================
-
-docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-
-# ================================================================
 # Authenticate Docker to ECR
 # ================================================================
 
 aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
 
 # ================================================================
-# Push the image to ECR
+# Tag the image - two tags, same image
+# 1. Semantic version tag  → what ECS and humans reference
+# 2. SHA tag               → what the pipeline reads next run
 # ================================================================
 
+docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${IMAGE_NAME}:sha-${APP_COMMIT_SHA}"
+
+# ================================================================
+# Push both image tags to ECR
+# ================================================================
+
+echo "Pushing version tag: ${IMAGE_TAG}"
 docker push "${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+echo "Pushing SHA tag: sha-${APP_COMMIT_SHA}"
+docker push "${ECR_REGISTRY}/${IMAGE_NAME}:sha-${APP_COMMIT_SHA}"
+
+echo "Successfully pushed:"
+echo "  ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+echo "  ${ECR_REGISTRY}/${IMAGE_NAME}:sha-${APP_COMMIT_SHA}"
