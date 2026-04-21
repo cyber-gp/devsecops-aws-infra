@@ -198,9 +198,8 @@ jobs:
     needs: 
       - deploy_aws_infrastructure
       - detect_changes
-    if: |
-      needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
-      needs.detect_changes.outputs.app_changed == 'true'
+    if:
+      needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy' && needs.detect_changes.outputs.app_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
