@@ -26,7 +26,7 @@ aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AW
 # ================================================================
 
 docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${IMAGE_NAME}:sha-${APP_COMMIT_SHA}"
+# docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${IMAGE_NAME}:sha-${APP_COMMIT_SHA}"
 
 # ================================================================
 # Push both image tags to ECR
@@ -35,9 +35,9 @@ docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${IMAGE_NAME}:sha-${APP
 echo "Pushing version tag: ${IMAGE_TAG}"
 docker push "${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
-echo "Pushing SHA tag: sha-${APP_COMMIT_SHA}"
-docker push "${ECR_REGISTRY}/${IMAGE_NAME}:sha-${APP_COMMIT_SHA}"
+# echo "Pushing SHA tag: sha-${APP_COMMIT_SHA}"
+# docker push "${ECR_REGISTRY}/${IMAGE_NAME}:sha-${APP_COMMIT_SHA}"
 
 echo "Successfully pushed:"
 echo "  ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-echo "  ${ECR_REGISTRY}/${IMAGE_NAME}:sha-${APP_COMMIT_SHA}"
+# echo "  ${ECR_REGISTRY}/${IMAGE_NAME}:sha-${APP_COMMIT_SHA}"
