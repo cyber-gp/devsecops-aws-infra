@@ -52,6 +52,7 @@ env:
   RDS_DB_NAME: applicationdb
   RDS_DB_USERNAME: admin
   IMAGE_NAME: nest
+  IMAGE_TAG: 1.0.1
 
 jobs:
   #--------------------------------------------------------------
@@ -91,6 +92,13 @@ jobs:
         working-directory: ./terraform-module-ecs-cicd/nest-app
         run: |
           terraform plan -no-color 
+      # 2>&1 | tee plan-output.txt 
+      #     exit ${PIPESTATUS[0]}
+      
+      # - name: Show plan output on failure
+      #   if: failure()
+      #   working-directory: ./terraform-module-ecs-cicd/nest-app
+      #   run: cat plan-output.txt
 
       - name: Run Terraform apply/destroy
         working-directory: ./terraform-module-ecs-cicd/nest-app
@@ -113,93 +121,13 @@ jobs:
       ecs_cluster_name: ${{ env.ECS_CLUSTER_NAME }}
       ecs_service_name: ${{ env.ECS_SERVICE_NAME }}
 
-
-  # Detect Changes
-  detect_changes:
-    name: Detect application code changes
-    needs: deploy_aws_infrastructure
-    if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Compare app repo SHA vs last built image SHA label
-        id: changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-        run: |
-          LATEST_APP_SHA=$(curl -sf \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ env.GITHUB_USERNAME }}/${{ env.REPOSITORY_NAME }}/commits/main" \
-            | jq -r '.sha')
-
-          if [ -z "$LATEST_APP_SHA" ] || [ "$LATEST_APP_SHA" == "null" ]; then
-            echo "Could not fetch app repo SHA — forcing build to be safe"
-            echo "app_changed=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          echo "Latest app commit SHA: $LATEST_APP_SHA"
-
-          LAST_IMAGE_DIGEST=$(aws ecr describe-images \
-            --repository-name "${{ env.IMAGE_NAME }}" \
-            --region "${{ env.AWS_REGION }}" \
-            --query 'sort_by(imageDetails, &imagePushedAt)[-1].imageDigest' \
-            --output text 2>/dev/null || echo "NONE")
-
-          if [ "$LAST_IMAGE_DIGEST" == "NONE" ] || [ -z "$LAST_IMAGE_DIGEST" ]; then
-            echo "No existing ECR images — first build"
-            echo "app_changed=true" >> $GITHUB_OUTPUT
-            echo "app_sha=$LATEST_APP_SHA" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          LAST_BUILT_SHA=$(aws ecr get-download-url-for-layer \
-            --repository-name "${{ env.IMAGE_NAME }}" \
-            --region "${{ env.AWS_REGION }}" \
-            --layer-digest "$LAST_IMAGE_DIGEST" 2>/dev/null \
-            || echo "NONE")
- 
-          LAST_BUILT_SHA=$(aws ecr describe-images \
-            --repository-name "${{ env.IMAGE_NAME }}" \
-            --region "${{ env.AWS_REGION }}" \
-            --query 'sort_by(imageDetails, &imagePushedAt)[-1].imageTags' \
-            --output json 2>/dev/null \
-            | jq -r '.[] | select(startswith("sha-"))' \
-            | sed 's/sha-//' \
-            || echo "NONE")
-
-          echo "Last built SHA: $LAST_BUILT_SHA"
-
-          if [ "$LATEST_APP_SHA" == "$LAST_BUILT_SHA" ]; then
-            echo "No app changes since last build — skipping"
-            echo "app_changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "New commits detected — build will run"
-            echo "app_changed=true" >> $GITHUB_OUTPUT
-          fi
-
-          echo "app_sha=$LATEST_APP_SHA" >> $GITHUB_OUTPUT
-
-    outputs:
-      app_changed: ${{ steps.changes.outputs.app_changed }}
-      app_sha: ${{ steps.changes.outputs.app_sha }}
-
   #--------------------------------------------------------------
   # JOB 2: Build, Scan, and Push Docker Image to ECR
   #--------------------------------------------------------------
   build_and_push_image:
     name: Build, scan, and push Docker image to ECR
-    needs: 
-      - deploy_aws_infrastructure
-      - detect_changes
-    if:
-      needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy' && needs.detect_changes.outputs.app_changed == 'true'
+    needs: deploy_aws_infrastructure
+    if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -211,33 +139,6 @@ jobs:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Auto-generate next semantic version from ECR
-        id: versioning
-        run: |
-          LATEST_TAG=$(aws ecr describe-images \
-            --repository-name "${{ env.IMAGE_NAME }}" \
-            --region "${{ env.AWS_REGION }}" \
-            --query 'imageDetails[*].imageTags[*]' \
-            --output text 2>/dev/null \
-            | tr '\t' '\n' \
-            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
-            | sort -V \
-            | tail -1)
-
-          if [ -z "$LATEST_TAG" ]; then
-            NEXT_TAG="1.0.0"
-            echo "No existing version tags — starting at $NEXT_TAG"
-          else
-            MAJOR=$(echo "$LATEST_TAG" | cut -d. -f1)
-            MINOR=$(echo "$LATEST_TAG" | cut -d. -f2)
-            PATCH=$(echo "$LATEST_TAG" | cut -d. -f3)
-            NEXT_TAG="${MAJOR}.${MINOR}.$((PATCH + 1))"
-            echo "Incrementing $LATEST_TAG → $NEXT_TAG"
-          fi
-
-          echo "IMAGE_TAG=$NEXT_TAG" >> $GITHUB_ENV
-          echo "image_tag=$NEXT_TAG" >> $GITHUB_OUTPUT
-
       - name: Build Docker image
         working-directory: ./docker/nest-app-cicd
         env:
@@ -245,7 +146,6 @@ jobs:
           RDS_ENDPOINT: ${{ needs.deploy_aws_infrastructure.outputs.rds_endpoint }}
           RDS_DB_PASSWORD: ${{ secrets.RDS_DB_PASSWORD }}
           PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-          APP_COMMIT_SHA: ${{ needs.detect_changes.outputs.app_sha }}
         run: bash ./build-image.sh
 
       - name: Scan Docker image for vulnerabilities
@@ -272,7 +172,7 @@ jobs:
           echo "SCAN_SUMMARY=$SUMMARY" >> $GITHUB_ENV
           echo "$SUMMARY"
 
-      - name: Re-configure AWS Credentials before push
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6
         with: 
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
@@ -280,8 +180,6 @@ jobs:
 
       - name: Push Docker image to ECR
         working-directory: ./docker/nest-app-cicd
-        env:
-          APP_COMMIT_SHA: ${{ needs.detect_changes.outputs.app_sha }}
         run: bash ./push-image.sh
 
     outputs:
@@ -290,243 +188,243 @@ jobs:
   #--------------------------------------------------------------
   # JOB 3: Create New Task Definition Revision
   #--------------------------------------------------------------
-  # create_task_definition_revision:
-  #   name: Create new task definition revision
-  #   needs:
-  #     - deploy_aws_infrastructure
-  #     - build_and_push_image
-  #   if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
-  #   runs-on: ubuntu-latest
-  #   steps:
+  create_task_definition_revision:
+    name: Create new task definition revision
+    needs:
+      - deploy_aws_infrastructure
+      - build_and_push_image
+    if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
+    runs-on: ubuntu-latest
+    steps:
 
-  #     - name: Configure AWS Credentials
-  #       uses: aws-actions/configure-aws-credentials@v6
-  #       with: 
-  #         role-to-assume: ${{ env.AWS_ROLE_ARN }}
-  #         aws-region: ${{ env.AWS_REGION }}
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with: 
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
           
-  #     - name: Get current task definition revision
-  #       env:
-  #         ECS_FAMILY: ${{ needs.deploy_aws_infrastructure.outputs.task_definition_name }}
-  #       run: |
-  #         CURRENT_REVISION=$(aws ecs describe-task-definition --task-definition "${ECS_FAMILY}" \
-  #           --query 'taskDefinition.revision' --output text)
-  #         echo "CURRENT_TASK_DEFINITION_REVISION=$CURRENT_REVISION" >> $GITHUB_ENV
+      - name: Get current task definition revision
+        env:
+          ECS_FAMILY: ${{ needs.deploy_aws_infrastructure.outputs.task_definition_name }}
+        run: |
+          CURRENT_REVISION=$(aws ecs describe-task-definition --task-definition "${ECS_FAMILY}" \
+            --query 'taskDefinition.revision' --output text)
+          echo "CURRENT_TASK_DEFINITION_REVISION=$CURRENT_REVISION" >> $GITHUB_ENV
 
-  #     - name: Create new task definition revision
-  #       env:
-  #         ECS_FAMILY: ${{ needs.deploy_aws_infrastructure.outputs.task_definition_name }}
-  #         ECS_IMAGE: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-  #       run: |
-  #         TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition "${ECS_FAMILY}")
+      - name: Create new task definition revision
+        env:
+          ECS_FAMILY: ${{ needs.deploy_aws_infrastructure.outputs.task_definition_name }}
+          ECS_IMAGE: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        run: |
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition "${ECS_FAMILY}")
 
-  #         NEW_TASK_DEFINITION=$(echo "$TASK_DEFINITION" | jq --arg IMAGE "${ECS_IMAGE}" \
-  #           '.taskDefinition | .containerDefinitions[0].image = $IMAGE |
-  #           del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
+          NEW_TASK_DEFINITION=$(echo "$TASK_DEFINITION" | jq --arg IMAGE "${ECS_IMAGE}" \
+            '.taskDefinition | .containerDefinitions[0].image = $IMAGE |
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
 
-  #         NEW_TASK_DEFINITION_REVISION=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION" | jq '.taskDefinition.revision')
+          NEW_TASK_DEFINITION_REVISION=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION" | jq '.taskDefinition.revision')
 
-  #         echo "NEW_TASK_DEFINITION_REVISION=$NEW_TASK_DEFINITION_REVISION" >> $GITHUB_ENV
+          echo "NEW_TASK_DEFINITION_REVISION=$NEW_TASK_DEFINITION_REVISION" >> $GITHUB_ENV
 
-  #   outputs:
-  #     new_task_definition_revision: ${{ env.NEW_TASK_DEFINITION_REVISION }}
-  #     current_task_definition_revision: ${{ env.CURRENT_TASK_DEFINITION_REVISION }}
+    outputs:
+      new_task_definition_revision: ${{ env.NEW_TASK_DEFINITION_REVISION }}
+      current_task_definition_revision: ${{ env.CURRENT_TASK_DEFINITION_REVISION }}
 
-  # # #--------------------------------------------------------------
-  # # # JOB 4: Restart ECS Fargate Service
-  # # #--------------------------------------------------------------
-  # restart_ecs_service:
-  #   name: Restart ECS Fargate service
-  #   needs:
-  #     - deploy_aws_infrastructure
-  #     - create_task_definition_revision
-  #   if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
-  #   runs-on: ubuntu-latest
-  #   steps:
+  # #--------------------------------------------------------------
+  # # JOB 4: Restart ECS Fargate Service
+  # #--------------------------------------------------------------
+  restart_ecs_service:
+    name: Restart ECS Fargate service
+    needs:
+      - deploy_aws_infrastructure
+      - create_task_definition_revision
+    if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
+    runs-on: ubuntu-latest
+    steps:
 
-  #     - name: Configure AWS Credentials
-  #       uses: aws-actions/configure-aws-credentials@v6
-  #       with: 
-  #         role-to-assume: ${{ env.AWS_ROLE_ARN }}
-  #         aws-region: ${{ env.AWS_REGION }}
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with: 
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-  #     - name: Restart ECS service
-  #       env:
-  #         ECS_CLUSTER_NAME: ${{ needs.deploy_aws_infrastructure.outputs.ecs_cluster_name }}
-  #         ECS_SERVICE_NAME: ${{ needs.deploy_aws_infrastructure.outputs.ecs_service_name }}
-  #         TASK_DEFINITION_NAME: ${{ needs.deploy_aws_infrastructure.outputs.task_definition_name }}
-  #         TASK_DEFINITION_REVISION: ${{ needs.create_task_definition_revision.outputs.new_task_definition_revision }}
-  #       run: |
-  #         aws ecs update-service --cluster "${ECS_CLUSTER_NAME}" --service "${ECS_SERVICE_NAME}" \
-  #           --task-definition "${TASK_DEFINITION_NAME}:${TASK_DEFINITION_REVISION}" --force-new-deployment
+      - name: Restart ECS service
+        env:
+          ECS_CLUSTER_NAME: ${{ needs.deploy_aws_infrastructure.outputs.ecs_cluster_name }}
+          ECS_SERVICE_NAME: ${{ needs.deploy_aws_infrastructure.outputs.ecs_service_name }}
+          TASK_DEFINITION_NAME: ${{ needs.deploy_aws_infrastructure.outputs.task_definition_name }}
+          TASK_DEFINITION_REVISION: ${{ needs.create_task_definition_revision.outputs.new_task_definition_revision }}
+        run: |
+          aws ecs update-service --cluster "${ECS_CLUSTER_NAME}" --service "${ECS_SERVICE_NAME}" \
+            --task-definition "${TASK_DEFINITION_NAME}:${TASK_DEFINITION_REVISION}" --force-new-deployment
 
-  #         aws ecs wait services-stable --cluster "${ECS_CLUSTER_NAME}" --services "${ECS_SERVICE_NAME}"
+          aws ecs wait services-stable --cluster "${ECS_CLUSTER_NAME}" --services "${ECS_SERVICE_NAME}"
 
-  # # #--------------------------------------------------------------
-  # # # JOB 5: Test Application Health
-  # # #--------------------------------------------------------------
-  # test_application:
-  #   name: Test application health
-  #   needs:
-  #     - deploy_aws_infrastructure
-  #     - restart_ecs_service
-  #   if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Wait for service to stabilize
-  #       run: sleep 30
+  # #--------------------------------------------------------------
+  # # JOB 5: Test Application Health
+  # #--------------------------------------------------------------
+  test_application:
+    name: Test application health
+    needs:
+      - deploy_aws_infrastructure
+      - restart_ecs_service
+    if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for service to stabilize
+        run: sleep 30
 
-  #     - name: Check application health
-  #       env:
-  #         DOMAIN_NAME: ${{ needs.deploy_aws_infrastructure.outputs.domain_name }}
-  #       run: |
-  #         RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "https://demo.${DOMAIN_NAME}")
-  #         echo "HTTP Status: $RESPONSE"
+      - name: Check application health
+        env:
+          DOMAIN_NAME: ${{ needs.deploy_aws_infrastructure.outputs.domain_name }}
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "https://demo.${DOMAIN_NAME}")
+          echo "HTTP Status: $RESPONSE"
 
-  #         if [ "$RESPONSE" -eq 200 ]; then
-  #           echo "Application is healthy"
-  #         else
-  #           echo "Application health check failed"
-  #           exit 1
-  #         fi
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "Application is healthy"
+          else
+            echo "Application health check failed"
+            exit 1
+          fi
 
-  # # #--------------------------------------------------------------
-  # # # JOB 6: Monitor ECS Deployment
-  # # #--------------------------------------------------------------
-  # monitor_deployment:
-  #   name: Monitor ECS deployment
-  #   needs:
-  #     - deploy_aws_infrastructure
-  #     - restart_ecs_service
-  #   if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
-  #   runs-on: ubuntu-latest
-  #   steps:
+  # #--------------------------------------------------------------
+  # # JOB 6: Monitor ECS Deployment
+  # #--------------------------------------------------------------
+  monitor_deployment:
+    name: Monitor ECS deployment
+    needs:
+      - deploy_aws_infrastructure
+      - restart_ecs_service
+    if: needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
+    runs-on: ubuntu-latest
+    steps:
    
-  #     - name: Configure AWS Credentials
-  #       uses: aws-actions/configure-aws-credentials@v6
-  #       with: 
-  #         role-to-assume: ${{ env.AWS_ROLE_ARN }}
-  #         aws-region: ${{ env.AWS_REGION }}   
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with: 
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}   
       
-  #     - name: Check ECS running tasks
-  #       env:
-  #         ECS_CLUSTER_NAME: ${{ needs.deploy_aws_infrastructure.outputs.ecs_cluster_name }}
-  #         ECS_SERVICE_NAME: ${{ needs.deploy_aws_infrastructure.outputs.ecs_service_name }}
-  #       run: |
-  #         RUNNING_COUNT=$(aws ecs describe-services \
-  #           --cluster "${ECS_CLUSTER_NAME}" \
-  #           --services "${ECS_SERVICE_NAME}" \
-  #           --query "services[0].runningCount" \
-  #           --output text)
+      - name: Check ECS running tasks
+        env:
+          ECS_CLUSTER_NAME: ${{ needs.deploy_aws_infrastructure.outputs.ecs_cluster_name }}
+          ECS_SERVICE_NAME: ${{ needs.deploy_aws_infrastructure.outputs.ecs_service_name }}
+        run: |
+          RUNNING_COUNT=$(aws ecs describe-services \
+            --cluster "${ECS_CLUSTER_NAME}" \
+            --services "${ECS_SERVICE_NAME}" \
+            --query "services[0].runningCount" \
+            --output text)
 
-  #         DESIRED_COUNT=$(aws ecs describe-services \
-  #           --cluster "${ECS_CLUSTER_NAME}" \
-  #           --services "${ECS_SERVICE_NAME}" \
-  #           --query "services[0].desiredCount" \
-  #           --output text)
+          DESIRED_COUNT=$(aws ecs describe-services \
+            --cluster "${ECS_CLUSTER_NAME}" \
+            --services "${ECS_SERVICE_NAME}" \
+            --query "services[0].desiredCount" \
+            --output text)
 
-  #         echo "Running tasks: $RUNNING_COUNT / Desired tasks: $DESIRED_COUNT"
+          echo "Running tasks: $RUNNING_COUNT / Desired tasks: $DESIRED_COUNT"
 
-  #         if [ "$RUNNING_COUNT" -eq "$DESIRED_COUNT" ]; then
-  #           echo "All tasks are running successfully"
-  #         else
-  #           echo "Task count mismatch - deployment may have issues"
-  #           exit 1
-  #         fi
-
-
-  # # #--------------------------------------------------------------
-  # # # JOB 7: Rollback on Failure
-  # # #--------------------------------------------------------------
-  # rollback:
-  #   name: Rollback to previous version
-  #   needs:
-  #     - deploy_aws_infrastructure
-  #     - create_task_definition_revision
-  #     - restart_ecs_service
-  #     - test_application
-  #     - monitor_deployment
-  #   if: failure() && needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
-  #   runs-on: ubuntu-latest
-  #   steps:
-
-  #     - name: Configure AWS Credentials
-  #       uses: aws-actions/configure-aws-credentials@v6
-  #       with: 
-  #         role-to-assume: ${{ env.AWS_ROLE_ARN }}
-  #         aws-region: ${{ env.AWS_REGION }}  
-
-  #     - name: Rollback ECS service to previous task definition
-  #       env:
-  #         ECS_CLUSTER_NAME: ${{ needs.deploy_aws_infrastructure.outputs.ecs_cluster_name }}
-  #         ECS_SERVICE_NAME: ${{ needs.deploy_aws_infrastructure.outputs.ecs_service_name }}
-  #         TASK_DEFINITION_NAME: ${{ needs.deploy_aws_infrastructure.outputs.task_definition_name }}
-  #         PREVIOUS_REVISION: ${{ needs.create_task_definition_revision.outputs.current_task_definition_revision }}
-  #       run: |
-  #         echo "Rolling back to task definition revision: $PREVIOUS_REVISION"
-
-  #         aws ecs update-service --cluster "${ECS_CLUSTER_NAME}" --service "${ECS_SERVICE_NAME}" \
-  #           --task-definition "${TASK_DEFINITION_NAME}:${PREVIOUS_REVISION}" --force-new-deployment
-
-  #         aws ecs wait services-stable --cluster "${ECS_CLUSTER_NAME}" --services "${ECS_SERVICE_NAME}"
-
-  #         echo "Rollback complete"
+          if [ "$RUNNING_COUNT" -eq "$DESIRED_COUNT" ]; then
+            echo "All tasks are running successfully"
+          else
+            echo "Task count mismatch - deployment may have issues"
+            exit 1
+          fi
 
 
-  # # #--------------------------------------------------------------
-  # # # JOB 8: Send Notification
-  # # #--------------------------------------------------------------
-  # notify:
-  #   name: Send notification
-  #   needs:
-  #     - deploy_aws_infrastructure
-  #     - build_and_push_image
-  #     - create_task_definition_revision
-  #     - restart_ecs_service
-  #     - test_application
-  #     - monitor_deployment
-  #   if: always() && needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
-  #   runs-on: ubuntu-latest
-  #   steps:
+  # #--------------------------------------------------------------
+  # # JOB 7: Rollback on Failure
+  # #--------------------------------------------------------------
+  rollback:
+    name: Rollback to previous version
+    needs:
+      - deploy_aws_infrastructure
+      - create_task_definition_revision
+      - restart_ecs_service
+      - test_application
+      - monitor_deployment
+    if: failure() && needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with: 
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}  
+
+      - name: Rollback ECS service to previous task definition
+        env:
+          ECS_CLUSTER_NAME: ${{ needs.deploy_aws_infrastructure.outputs.ecs_cluster_name }}
+          ECS_SERVICE_NAME: ${{ needs.deploy_aws_infrastructure.outputs.ecs_service_name }}
+          TASK_DEFINITION_NAME: ${{ needs.deploy_aws_infrastructure.outputs.task_definition_name }}
+          PREVIOUS_REVISION: ${{ needs.create_task_definition_revision.outputs.current_task_definition_revision }}
+        run: |
+          echo "Rolling back to task definition revision: $PREVIOUS_REVISION"
+
+          aws ecs update-service --cluster "${ECS_CLUSTER_NAME}" --service "${ECS_SERVICE_NAME}" \
+            --task-definition "${TASK_DEFINITION_NAME}:${PREVIOUS_REVISION}" --force-new-deployment
+
+          aws ecs wait services-stable --cluster "${ECS_CLUSTER_NAME}" --services "${ECS_SERVICE_NAME}"
+
+          echo "Rollback complete"
+
+
+  # #--------------------------------------------------------------
+  # # JOB 8: Send Notification
+  # #--------------------------------------------------------------
+  notify:
+    name: Send notification
+    needs:
+      - deploy_aws_infrastructure
+      - build_and_push_image
+      - create_task_definition_revision
+      - restart_ecs_service
+      - test_application
+      - monitor_deployment
+    if: always() && needs.deploy_aws_infrastructure.outputs.terraform_action != 'destroy'
+    runs-on: ubuntu-latest
+    steps:
     
-  #     - name: Send Slack notification
-  #       uses: slackapi/slack-github-action@v3.0.1
-  #       with:
-  #         webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-  #         webhook-type: incoming-webhook
-  #         payload: |
-  #           {
-  #             "text": "${{ needs.test_application.result == 'success' && needs.monitor_deployment.result == 'success' && 'Deployment Successful' || 'Deployment Failed' }}",
-  #             "blocks": [
-  #               {
-  #                 "type": "header",
-  #                 "text": {
-  #                   "type": "plain_text",
-  #                   "text": "${{ needs.test_application.result == 'success' && needs.monitor_deployment.result == 'success' && 'Deployment Successful' || 'Deployment Failed' }}"
-  #                 }
-  #               },
-  #               {
-  #                 "type": "section",
-  #                 "fields": [
-  #                   { "type": "mrkdwn", "text": "*Project:*\n${{ env.PROJECT_NAME }}" },
-  #                   { "type": "mrkdwn", "text": "*Environment:*\n${{ env.ENVIRONMENT }}" },
-  #                   { "type": "mrkdwn", "text": "*Image:*\n${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" },
-  #                   { "type": "mrkdwn", "text": "*Triggered by:*\n${{ github.actor }}" }
-  #                 ]
-  #               },
-  #               {
-  #                 "type": "section",
-  #                 "text": {
-  #                   "type": "mrkdwn",
-  #                   "text": "*Security Scan:*\n${{ needs.build_and_push_image.outputs.scan_summary || 'Scan not available' }}"
-  #                 }
-  #               },
-  #               {
-  #                 "type": "section",
-  #                 "text": {
-  #                   "type": "mrkdwn",
-  #                   "text": "*Pipeline:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
-  #                 }
-  #               }
-  #             ]
-  #           }
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v3.0.1
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "${{ needs.test_application.result == 'success' && needs.monitor_deployment.result == 'success' && 'Deployment Successful' || 'Deployment Failed' }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ needs.test_application.result == 'success' && needs.monitor_deployment.result == 'success' && 'Deployment Successful' || 'Deployment Failed' }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    { "type": "mrkdwn", "text": "*Project:*\n${{ env.PROJECT_NAME }}" },
+                    { "type": "mrkdwn", "text": "*Environment:*\n${{ env.ENVIRONMENT }}" },
+                    { "type": "mrkdwn", "text": "*Image:*\n${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" },
+                    { "type": "mrkdwn", "text": "*Triggered by:*\n${{ github.actor }}" }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Security Scan:*\n${{ needs.build_and_push_image.outputs.scan_summary || 'Scan not available' }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Pipeline:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+                  }
+                }
+              ]
+            }
