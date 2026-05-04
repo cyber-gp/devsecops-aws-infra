@@ -138,7 +138,7 @@ module "ecs" {
   ecs_task_execution_role_arn = module.ecs-role.ecs_task_execution_role_arn
   ecs_task_role_arn           = module.ecs-role.ecs_task_role_arn
   architecture                = "X86_64"
-  container_image             = "198811873315.dkr.ecr.us-east-2.amazonaws.com/nest:37bb641"
+  container_image             = "198811873315.dkr.ecr.us-east-2.amazonaws.com/nest:1.0.0"
   container_port              = 80
   host_port                   = 80
   service_desired_count       = 1
