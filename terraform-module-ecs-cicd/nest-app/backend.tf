@@ -4,6 +4,8 @@ terraform {
     bucket         = "dev-nest-terraform-state"
     key            = "terraform-module/nest/ecs-cicd/terraform.tfstate"
     region         = "us-east-2"
-    dynamodb_table = "dev-nest-terraform-lock"
+    encrypt        = true
+    use_lockfile   = true
+    # dynamodb_table = "dev-nest-terraform-lock"
   }
 }
