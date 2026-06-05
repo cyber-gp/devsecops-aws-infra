@@ -1,0 +1,21 @@
+aws_region    = "us-east-2"
+project_name  = "vulnbank"
+environment   = "dev"
+
+domain_name   = "vulnbank-lab.example"
+record_name   = "app"
+
+instance_type = "t3.small"
+ebs_size_gb   = 30
+
+# Restrict SSH to your public IP, e.g. "203.0.113.10/32"
+admin_cidr = "0.0.0.0/32"
+
+app_repo_url    = "https://github.com/cyber-gp/devsecops-vuln-bank.git"
+app_repo_branch = "main"
+
+github_repository   = "cyber-gp/aws-demo-projects"
+github_oidc_enabled = true
+
+# Optional; leave empty for AI mock mode
+# deepseek_api_key = ""

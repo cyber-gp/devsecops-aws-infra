@@ -1,0 +1,117 @@
+name: Deploy Vuln-Bank App
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_repo_branch:
+        description: Git branch to deploy from devsecops-vuln-bank
+        required: false
+        default: main
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/vuln-bank/**"
+      - ".github/workflows/vuln-bank-deploy.yml"
+  repository_dispatch:
+    types: [vuln-bank-app-updated]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+  SSM_INSTANCE_ID_PARAM: ${{ vars.VULNBANK_SSM_INSTANCE_ID_PARAM || '/dev/vulnbank/ec2_instance_id' }}
+  SSM_DEPLOY_CONFIG_PARAM: ${{ vars.VULNBANK_SSM_DEPLOY_CONFIG_PARAM || '/dev/vulnbank/deploy_config' }}
+  WEBSITE_URL: ${{ vars.VULNBANK_WEBSITE_URL }}
+
+jobs:
+  deploy:
+    name: Deploy via SSM
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout aws-demo-projects
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.VULNBANK_AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve EC2 instance ID
+        id: target
+        run: |
+          INSTANCE_ID=$(aws ssm get-parameter \
+            --name "${{ env.SSM_INSTANCE_ID_PARAM }}" \
+            --query Parameter.Value \
+            --output text)
+          echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy application on EC2
+        id: ssm
+        run: |
+          SCRIPT_B64=$(base64 -w 0 scripts/vuln-bank/deploy.sh)
+          jq -n \
+            --arg b64 "$SCRIPT_B64" \
+            --arg region "${{ env.AWS_REGION }}" \
+            --arg config "${{ env.SSM_DEPLOY_CONFIG_PARAM }}" \
+            '{
+              commands: [
+                ("export AWS_DEFAULT_REGION=" + $region),
+                ("export SSM_DEPLOY_CONFIG=" + $config),
+                ("echo " + $b64 + " | base64 -d > /tmp/vuln-bank-deploy.sh"),
+                "chmod +x /tmp/vuln-bank-deploy.sh",
+                "/tmp/vuln-bank-deploy.sh"
+              ]
+            }' > /tmp/ssm-params.json
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ steps.target.outputs.instance_id }}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "vuln-bank CD from GitHub Actions" \
+            --parameters file:///tmp/ssm-params.json \
+            --query Command.CommandId \
+            --output text)
+          echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for SSM command
+        run: |
+          aws ssm wait command-executed \
+            --command-id "${{ steps.ssm.outputs.command_id }}" \
+            --instance-id "${{ steps.target.outputs.instance_id }}"
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "${{ steps.ssm.outputs.command_id }}" \
+            --instance-id "${{ steps.target.outputs.instance_id }}" \
+            --query Status \
+            --output text)
+          echo "SSM status: $STATUS"
+          if [ "$STATUS" != "Success" ]; then
+            aws ssm get-command-invocation \
+              --command-id "${{ steps.ssm.outputs.command_id }}" \
+              --instance-id "${{ steps.target.outputs.instance_id }}" \
+              --query '[StandardOutputContent, StandardErrorContent]' \
+              --output text
+            exit 1
+          fi
+
+      - name: Health check
+        run: |
+          URL="${{ env.WEBSITE_URL }}"
+          if [ -z "$URL" ]; then
+            URL=$(aws ssm get-parameter \
+              --name "${{ env.SSM_DEPLOY_CONFIG_PARAM }}" \
+              --query Parameter.Value \
+              --output text | jq -r '.website_url')
+          fi
+          echo "Checking $URL/healthz"
+          for i in $(seq 1 24); do
+            if curl -fsS "$URL/healthz"; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Health check failed"
+          exit 1

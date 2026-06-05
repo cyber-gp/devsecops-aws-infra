@@ -8,3 +8,12 @@
 # .tfstate files
 .terraform
 .terraform.lock.hcl
+
+.env
+*.pyc
+__pycache__/
+.venv/
+
+# Vuln-bank Terraform local vars (may contain secrets)
+terraform/vuln-bank/terraform.tfvars
+terraform/vuln-bank/*.auto.tfvars
