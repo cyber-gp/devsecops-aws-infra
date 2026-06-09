@@ -109,7 +109,7 @@ Set variable `github_repository` in Terraform to match your fork (default `cyber
 ### Automatic
 
 - Push changes to `scripts/vuln-bank/**` or the deploy workflow on `main`.
-- Run workflow **Deploy Vuln-Bank App** manually from Actions.
+- Run workflow **Deploy Vuln-Bank App** manually from Actions; set `app_repo_branch` to redeploy a non-default application branch without changing Terraform.
 
 ### From app repo (optional)
 
@@ -128,7 +128,7 @@ Target repo must be configured to accept `repository_dispatch` events.
 1. Assumes `VULNBANK_AWS_ROLE_ARN` via OIDC.
 2. Reads EC2 id from SSM.
 3. Runs [`scripts/vuln-bank/deploy.sh`](../scripts/vuln-bank/deploy.sh) on the instance via SSM.
-4. `git pull` on `/opt/vuln-bank`, refresh `.env` from Secrets Manager, `docker compose up -d --build`.
+4. `git pull --ff-only` on `/opt/vuln-bank`, refresh `.env` from Secrets Manager, rewrite the production Compose override, and `docker compose up -d --build`.
 5. `curl` **`/healthz`** on the public HTTPS URL.
 
 ## 4. Operations

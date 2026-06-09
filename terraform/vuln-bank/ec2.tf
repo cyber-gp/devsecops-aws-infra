@@ -32,6 +32,12 @@ resource "aws_instance" "app" {
 
   user_data_replace_on_change = false
 
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
   root_block_device {
     volume_size = 30
     volume_type = "gp3"
