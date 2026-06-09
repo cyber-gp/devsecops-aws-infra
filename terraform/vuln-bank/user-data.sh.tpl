@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euxo pipefail
+set -euo pipefail
 
 AWS_REGION="${aws_region}"
 SECRET_ARN="${secret_arn}"
@@ -36,25 +36,43 @@ systemctl enable --now amazon-ssm-agent
 # ---------------------------------------------------------------------------
 mkdir -p "$DATA_MOUNT"
 
-if ! blkid "$EBS_DEVICE"; then
-  # Wait for volume attachment (up to 3 minutes)
-  for i in $(seq 1 36); do
-    if [ -b "$EBS_DEVICE" ]; then
-      break
-    fi
-    sleep 5
-  done
+resolve_ebs_device() {
   if [ -b "$EBS_DEVICE" ]; then
-    mkfs -t xfs "$EBS_DEVICE"
+    echo "$EBS_DEVICE"
+    return 0
   fi
-fi
 
-if [ -b "$EBS_DEVICE" ]; then
-  UUID=$(blkid -s UUID -o value "$EBS_DEVICE" || true)
+  # Nitro instances expose EBS volumes as NVMe devices instead of /dev/sdX.
+  # Pick the first unmounted, unformatted disk that is not the root device.
+  ROOT_SOURCE=$(findmnt -n -o SOURCE /)
+  ROOT_DISK=$(lsblk -no PKNAME "$ROOT_SOURCE" 2>/dev/null | head -n1)
+  if [ -z "$ROOT_DISK" ]; then
+    ROOT_DISK=$(basename "$ROOT_SOURCE")
+  fi
+  lsblk -dn -o NAME,TYPE,MOUNTPOINT,FSTYPE | awk -v root="$ROOT_DISK" '$1 != root && $2 == "disk" && $3 == "" && $4 == "" {print "/dev/" $1; exit}'
+}
+
+# Wait for volume attachment (up to 3 minutes)
+for i in $(seq 1 36); do
+  RESOLVED_EBS_DEVICE=$(resolve_ebs_device || true)
+  if [ -n "$RESOLVED_EBS_DEVICE" ] && [ -b "$RESOLVED_EBS_DEVICE" ]; then
+    break
+  fi
+  sleep 5
+done
+
+if [ -n "${RESOLVED_EBS_DEVICE:-}" ] && [ -b "$RESOLVED_EBS_DEVICE" ]; then
+  if ! blkid "$RESOLVED_EBS_DEVICE"; then
+    mkfs -t xfs "$RESOLVED_EBS_DEVICE"
+  fi
+
+  UUID=$(blkid -s UUID -o value "$RESOLVED_EBS_DEVICE" || true)
   if [ -n "$UUID" ] && ! grep -q "$UUID" /etc/fstab; then
     echo "UUID=$UUID $DATA_MOUNT xfs defaults,nofail 0 2" >> /etc/fstab
   fi
-  mount -a || mount "$EBS_DEVICE" "$DATA_MOUNT"
+  mount -a || mount "$RESOLVED_EBS_DEVICE" "$DATA_MOUNT"
+else
+  echo "WARNING: EBS data volume was not found; using root volume for $DATA_MOUNT" >&2
 fi
 
 mkdir -p "$DATA_MOUNT/docker" "$DATA_MOUNT/vuln-bank/volumes/postgres_data" "$DATA_MOUNT/vuln-bank/uploads"
@@ -77,7 +95,7 @@ else
   cd "$APP_DIR"
   git fetch origin
   git checkout "$APP_REPO_BRANCH"
-  git pull origin "$APP_REPO_BRANCH"
+  git pull --ff-only origin "$APP_REPO_BRANCH"
 fi
 
 cd "$APP_DIR"
@@ -86,18 +104,22 @@ cd "$APP_DIR"
 # Write .env from Secrets Manager
 # ---------------------------------------------------------------------------
 SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" --query SecretString --output text)
-DB_PASSWORD=$(echo "$SECRET_JSON" | jq -r '.DB_PASSWORD')
-POSTGRES_PASSWORD=$(echo "$SECRET_JSON" | jq -r '.POSTGRES_PASSWORD')
+DB_PASSWORD=$(echo "$SECRET_JSON" | jq -er '.DB_PASSWORD')
+POSTGRES_PASSWORD=$(echo "$SECRET_JSON" | jq -er '.POSTGRES_PASSWORD')
 DEEPSEEK_API_KEY=$(echo "$SECRET_JSON" | jq -r '.DEEPSEEK_API_KEY // empty')
 
 cat > "$APP_DIR/.env" <<ENVFILE
 DB_NAME=vulnerable_bank
 DB_USER=postgres
 DB_PASSWORD=$DB_PASSWORD
+POSTGRES_DB=vulnerable_bank
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 DB_HOST=db
 DB_PORT=5432
 DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY
 ENVFILE
+chmod 600 "$APP_DIR/.env"
 
 # Production compose override: no public Postgres port, persist volumes on EBS
 cat > "$APP_DIR/docker-compose.prod.yml" <<'COMPOSE'
