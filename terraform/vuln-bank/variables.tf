@@ -87,7 +87,7 @@ variable "health_check_path" {
 variable "github_repository" {
   description = "GitHub repo for OIDC deploy role trust (org/repo)"
   type        = string
-  default     = "cyber-gp/aws-demo-projects"
+  default     = "cyber-gp/devsecops-aws-infra"
 }
 
 variable "github_oidc_enabled" {
@@ -96,8 +96,38 @@ variable "github_oidc_enabled" {
   default     = true
 }
 
+variable "db_name" {
+  description = "PostgreSQL database name (non-sensitive; set in TFC or tfvars)"
+  type        = string
+  default     = "vulnerable_bank"
+}
+
+variable "db_user" {
+  description = "PostgreSQL username (non-sensitive; set in TFC or tfvars)"
+  type        = string
+  default     = "postgres"
+}
+
+variable "db_host" {
+  description = "Database host as seen by the app container (Docker Compose service name)"
+  type        = string
+  default     = "db"
+}
+
+variable "db_port" {
+  description = "PostgreSQL port"
+  type        = string
+  default     = "5432"
+}
+
+variable "db_password" {
+  description = "PostgreSQL password — set only in Terraform Cloud as a sensitive workspace variable"
+  type        = string
+  sensitive   = true
+}
+
 variable "deepseek_api_key" {
-  description = "Optional DeepSeek API key for AI features (leave empty for mock mode)"
+  description = "Optional DeepSeek API key — set in Terraform Cloud as a sensitive workspace variable (empty for mock mode)"
   type        = string
   sensitive   = true
   default     = ""

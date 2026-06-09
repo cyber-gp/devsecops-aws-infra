@@ -14,8 +14,12 @@ admin_cidr = "0.0.0.0/32"
 app_repo_url    = "https://github.com/cyber-gp/devsecops-vuln-bank.git"
 app_repo_branch = "main"
 
-github_repository   = "cyber-gp/aws-demo-projects"
+github_repository   = "cyber-gp/devsecops-aws-infra"
 github_oidc_enabled = true
 
-# Optional; leave empty for AI mock mode
-# deepseek_api_key = ""
+# ---------------------------------------------------------------------------
+# Secrets — do NOT put values here. Set in Terraform Cloud workspace variables:
+#   db_password       (required, sensitive)
+#   deepseek_api_key  (optional, sensitive)
+# Non-secret DB settings below use defaults in variables.tf unless overridden.
+# ---------------------------------------------------------------------------

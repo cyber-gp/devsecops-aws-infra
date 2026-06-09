@@ -28,14 +28,16 @@ Deploy the intentionally vulnerable [devsecops-vuln-bank](https://github.com/cyb
 
 In the workspace, set **Terraform variables** (from `terraform.tfvars.example`):
 
-| Variable | Example |
-|----------|---------|
-| `domain_name` | `vulnbank-lab.example` |
-| `record_name` | `app` |
-| `admin_cidr` | `YOUR.IP.ADDRESS/32` |
-| `aws_region` | `us-east-2` |
+| Variable | Example | Sensitive |
+|----------|---------|-----------|
+| `domain_name` | `vulnbank-lab.example` | no |
+| `record_name` | `app` | no |
+| `admin_cidr` | `YOUR.IP.ADDRESS/32` | no |
+| `aws_region` | `us-east-2` | no |
+| `db_password` | *(strong password)* | **yes — required** |
+| `deepseek_api_key` | *(optional)* | **yes — optional** |
 
-Mark `deepseek_api_key` sensitive if used.
+Do **not** put `db_password` or `deepseek_api_key` in `terraform.tfvars` or commit them to Git. Terraform Cloud encrypts sensitive workspace variables; [`secrets.tf`](../terraform/vuln-bank/secrets.tf) writes them into AWS Secrets Manager for the EC2 app at apply time.
 
 ### Dynamic AWS credentials (Terraform Cloud → AWS OIDC)
 
